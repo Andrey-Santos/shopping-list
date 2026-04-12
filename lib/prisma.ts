@@ -1,7 +1,9 @@
 import "server-only";
 
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig } from "@neondatabase/serverless";
 import { PrismaClient } from "@prisma/client";
+import ws from "ws";
 
 declare global {
   var __prisma__: PrismaClient | undefined;
@@ -13,8 +15,10 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL nao definida.");
 }
 
-const adapter = new PrismaBetterSqlite3({
-  url: databaseUrl,
+neonConfig.webSocketConstructor = ws;
+
+const adapter = new PrismaNeon({
+  connectionString: databaseUrl,
 });
 
 const prisma = globalThis.__prisma__ ?? new PrismaClient({ adapter });
