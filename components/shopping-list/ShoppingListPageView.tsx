@@ -2,21 +2,89 @@
 
 import { useState } from "react";
 
-export default function ShoppingListPageView() {
-  const [itemName, setItemName] = useState("");
-  const [items, setItems] = useState<string[]>([]);
+import type { ShoppingItemDto } from "@/lib/shopping-list/types";
 
-  function handleAddItem() {
+type ShoppingListPageViewProps = {
+  initialItems: ShoppingItemDto[];
+};
+
+async function readErrorMessage(response: Response): Promise<string | null> {
+  try {
+    const payload = (await response.json()) as { message?: unknown };
+    return typeof payload.message === "string" ? payload.message : null;
+  } catch {
+    return null;
+  }
+}
+
+export default function ShoppingListPageView({
+  initialItems,
+}: ShoppingListPageViewProps) {
+  const [itemName, setItemName] = useState("");
+  const [items, setItems] = useState<ShoppingItemDto[]>(initialItems);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  async function handleAddItem() {
     const normalized = itemName.trim();
 
     if (!normalized) return;
 
-    setItems((current) => [...current, normalized]);
-    setItemName("");
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch("/api/shopping-items", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: normalized }),
+      });
+
+      if (!response.ok) {
+        const message =
+          (await readErrorMessage(response)) ?? "Nao foi possivel criar o item.";
+        throw new Error(message);
+      }
+
+      const createdItem = (await response.json()) as ShoppingItemDto;
+
+      setItems((current) => [createdItem, ...current]);
+      setItemName("");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Erro inesperado ao criar item.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleRemoveItem(index: number) {
-    setItems((current) => current.filter((_, i) => i !== index));
+  async function handleRemoveItem(id: number) {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`/api/shopping-items/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const message =
+          (await readErrorMessage(response)) ??
+          "Nao foi possivel remover o item.";
+        throw new Error(message);
+      }
+
+      setItems((current) => current.filter((item) => item.id !== id));
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Erro inesperado ao remover item.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -33,30 +101,45 @@ export default function ShoppingListPageView() {
             value={itemName}
             onChange={(event) => setItemName(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") handleAddItem();
+              if (event.key === "Enter" && !isSubmitting) {
+                void handleAddItem();
+              }
             }}
             className="text-gray-900 placeholder-gray-400 border border-gray-300 flex-1 border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={isSubmitting}
           />
 
           <button
-            onClick={handleAddItem}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            onClick={() => {
+              void handleAddItem();
+            }}
+            disabled={isSubmitting}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             +
           </button>
         </div>
 
+        {errorMessage && (
+          <p className="mt-3 text-sm text-red-600" role="alert">
+            {errorMessage}
+          </p>
+        )}
+
         <ul className="mt-4 space-y-2">
-          {items.map((item, index) => (
+          {items.map((item) => (
             <li
-              key={index}
+              key={item.id}
               className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg hover:bg-gray-100 transition"
             >
-              <span className="text-gray-800">{item}</span>
+              <span className="text-gray-800">{item.name}</span>
 
               <button
-                onClick={() => handleRemoveItem(index)}
-                className="text-red-500 hover:text-red-700"
+                onClick={() => {
+                  void handleRemoveItem(item.id);
+                }}
+                disabled={isSubmitting}
+                className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ✕
               </button>
