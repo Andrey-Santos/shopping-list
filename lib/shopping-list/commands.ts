@@ -46,7 +46,10 @@ function normalizeItemName(rawName: string): string {
     );
   }
 
-  return normalized;
+  const lowerCased = normalized.toLocaleLowerCase("pt-BR");
+  return (
+    lowerCased.charAt(0).toLocaleUpperCase("pt-BR") + lowerCased.slice(1)
+  );
 }
 
 function assertValidId(id: number): void {
